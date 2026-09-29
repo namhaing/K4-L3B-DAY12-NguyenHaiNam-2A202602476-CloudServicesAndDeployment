@@ -38,7 +38,9 @@ services:
   agent:
     build: .
     ports:
-      - "8000:8000"
+      # Dải cổng: 1 instance lấy 8000; `--scale agent=3` thì mỗi instance một cổng
+      # 8000/8001/8002 thay vì tranh nhau cổng 8000 → "port is already allocated"
+      - "8000-8002:8000"
     environment:
       # Secret lấy từ .env qua nội suy — không bao giờ viết thẳng giá trị vào đây
       AGENT_API_KEY: ${AGENT_API_KEY}
@@ -59,6 +61,20 @@ services:
     restart: unless-stopped
     # Thời gian chờ sau SIGTERM trước khi SIGKILL — đủ để xử lý nốt request (CP4)
     stop_grace_period: 30s
+
+  # Load balancer tùy chọn (CP4) — chỉ chạy khi bật profile `lb`:
+  #     docker compose --profile lb up -d --scale agent=3
+  # rồi gọi qua http://localhost:8080 — nginx chia request round-robin cho các agent
+  nginx:
+    image: nginx:alpine
+    profiles: ["lb"]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      agent:
+        condition: service_healthy
 
 volumes:
   redis-data:
